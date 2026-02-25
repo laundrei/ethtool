@@ -10,6 +10,7 @@ use crate::{
     feature::{parse_feature_nlas, EthtoolFeatureAttr},
     fec::{parse_fec_nlas, EthtoolFecAttr},
     link_mode::{parse_link_mode_nlas, EthtoolLinkModeAttr},
+    link_state::{parse_link_state_nlas, EthtoolLinkStateAttr},
     pause::{parse_pause_nlas, EthtoolPauseAttr},
     ring::{parse_ring_nlas, EthtoolRingAttr},
     tsinfo::{parse_tsinfo_nlas, EthtoolTsInfoAttr},
@@ -33,6 +34,8 @@ const ETHTOOL_MSG_FEC_GET_REPLY: u8 = 30;
 const ETHTOOL_MSG_CHANNELS_GET: u8 = 17;
 const ETHTOOL_MSG_CHANNELS_GET_REPLY: u8 = 18;
 const ETHTOOL_MSG_CHANNELS_SET: u8 = 18;
+const ETHTOOL_MSG_LINKSTATE_GET: u8 = 6;
+const ETHTOOL_MSG_LINKSTATE_GET_REPLY: u8 = 6;
 const ETHTOOL_MSG_MODULE_EEPROM_GET: u8 = 31;
 const ETHTOOL_MSG_MODULE_EEPROM_GET_REPLY: u8 = 32;
 
@@ -55,6 +58,8 @@ pub enum EthtoolCmd {
     ChannelGet,
     ChannelGetReply,
     ChannelSet,
+    LinkStateGet,
+    LinkStateGetReply,
     ModuleEEPROMGet,
     ModuleEEPROMGetReply,
 }
@@ -79,6 +84,8 @@ impl From<EthtoolCmd> for u8 {
             EthtoolCmd::ChannelGet => ETHTOOL_MSG_CHANNELS_GET,
             EthtoolCmd::ChannelGetReply => ETHTOOL_MSG_CHANNELS_GET_REPLY,
             EthtoolCmd::ChannelSet => ETHTOOL_MSG_CHANNELS_SET,
+            EthtoolCmd::LinkStateGet => ETHTOOL_MSG_LINKSTATE_GET,
+            EthtoolCmd::LinkStateGetReply => ETHTOOL_MSG_LINKSTATE_GET_REPLY,
             EthtoolCmd::ModuleEEPROMGet => ETHTOOL_MSG_MODULE_EEPROM_GET,
             EthtoolCmd::ModuleEEPROMGetReply => {
                 ETHTOOL_MSG_MODULE_EEPROM_GET_REPLY
@@ -97,6 +104,7 @@ pub enum EthtoolAttr {
     TsInfo(EthtoolTsInfoAttr),
     Fec(EthtoolFecAttr),
     Channel(EthtoolChannelAttr),
+    LinkState(EthtoolLinkStateAttr),
     ModuleEEPROM(EthtoolModuleEEPROMAttr),
 }
 
@@ -111,6 +119,7 @@ impl Nla for EthtoolAttr {
             Self::TsInfo(attr) => attr.value_len(),
             Self::Fec(attr) => attr.value_len(),
             Self::Channel(attr) => attr.value_len(),
+            Self::LinkState(attr) => attr.value_len(),
             Self::ModuleEEPROM(attr) => attr.value_len(),
         }
     }
@@ -125,6 +134,7 @@ impl Nla for EthtoolAttr {
             Self::TsInfo(attr) => attr.kind(),
             Self::Fec(attr) => attr.kind(),
             Self::Channel(attr) => attr.kind(),
+            Self::LinkState(attr) => attr.kind(),
             Self::ModuleEEPROM(attr) => attr.kind(),
         }
     }
@@ -139,6 +149,7 @@ impl Nla for EthtoolAttr {
             Self::TsInfo(attr) => attr.emit_value(buffer),
             Self::Fec(attr) => attr.emit_value(buffer),
             Self::Channel(attr) => attr.emit_value(buffer),
+            Self::LinkState(attr) => attr.emit_value(buffer),
             Self::ModuleEEPROM(attr) => attr.emit_value(buffer),
         }
     }
@@ -307,6 +318,25 @@ impl EthtoolMessage {
         }
     }
 
+    pub fn new_link_state_get(iface_name: Option<&str>) -> Self {
+        let nlas = match iface_name {
+            Some(s) => {
+                vec![EthtoolAttr::LinkState(EthtoolLinkStateAttr::Header(
+                    vec![EthtoolHeader::DevName(s.to_string())],
+                ))]
+            }
+            None => {
+                vec![EthtoolAttr::LinkState(EthtoolLinkStateAttr::Header(
+                    vec![],
+                ))]
+            }
+        };
+        EthtoolMessage {
+            cmd: EthtoolCmd::LinkStateGet,
+            nlas,
+        }
+    }
+
     pub fn new_module_eeprom_get(
         iface_name: Option<&str>,
         offset: u32,
@@ -398,6 +428,10 @@ impl ParseableParametrized<[u8], GenlHeader> for EthtoolMessage {
             ETHTOOL_MSG_CHANNELS_GET_REPLY => Self {
                 cmd: EthtoolCmd::ChannelGetReply,
                 nlas: parse_channel_nlas(buffer)?,
+            },
+            ETHTOOL_MSG_LINKSTATE_GET_REPLY => Self {
+                cmd: EthtoolCmd::LinkStateGetReply,
+                nlas: parse_link_state_nlas(buffer)?,
             },
             ETHTOOL_MSG_MODULE_EEPROM_GET_REPLY => Self {
                 cmd: EthtoolCmd::ModuleEEPROMGetReply,
